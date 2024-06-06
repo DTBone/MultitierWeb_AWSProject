@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: This template creates an Application Load Balancer with 2 EC2 instances.
+
+
+Resources:
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: LoadBalanceEC2Test
+      SecurityGroups:
+        - sg-0a138665864f3a843
+      Subnets: 
+        - subnet-011b7a9ab5c3ccc3c
+        - subnet-05e73fbe13115f7c2
+  MyEC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0230bd60aa48260c6
+      InstanceType: t2.micro
+      KeyName: vockey
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo yum update -y
+          sudo yum install -y java-11-amazon-corretto
+          sudo yum install -y git
+          sudo yum -y install nginx
+          cd /var/lib
+          sudo git clone https://github.com/KietUTE2812/apache.git
+          sudo sed -i 's/ContactBook/web_ck1/g' apache/conf/server.xml
+          sudo chmod +x ./apache/bin/startup.sh
+          sudo chmod +x ./apache/bin/shutdown.sh
+          sudo chmod +x ./apache/bin/catalina.sh
+          cd apache/webapps
+          sudo git clone https://github.com/KietUTE2812/web_ck1.git
+          sudo /var/lib/apache/bin/startup.sh
+      SecurityGroupIds:
+        - !Ref MySecurityGroupEC2
+      Tags:
+        - Key: Name
+          Value: MyEC2Instance1
+
+  MyEC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0230bd60aa48260c6
+      InstanceType: t2.micro
+      KeyName: vockey
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo yum update -y
+          sudo yum install -y java-11-amazon-corretto
+          sudo yum install -y git
+          sudo yum -y install nginx
+          cd /var/lib
+          sudo git clone https://github.com/KietUTE2812/apache.git
+          sudo sed -i 's/ContactBook/web_ck2/g' apache/conf/server.xml
+          sudo chmod +x ./apache/bin/startup.sh
+          sudo chmod +x ./apache/bin/shutdown.sh
+          sudo chmod +x ./apache/bin/catalina.sh
+          cd apache/webapps
+          sudo git clone https://github.com/KietUTE2812/web_ck2.git
+          sudo /var/lib/apache/bin/startup.sh
+      SecurityGroupIds:
+        - !Ref MySecurityGroupEC2  
+      Tags:
+        - Key: Name
+          Value: MyEC2Instance2
+
+  MySecurityGroupEC2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound traffic for Tomcat
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: MyTargetTest
+      Port: 8080
+      Protocol: HTTP
+      TargetType: instance 
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /Login.jsp
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200,302
+      Targets:
+        - Id: !Ref MyEC2Instance1
+          Port: 8080
+        - Id: !Ref MyEC2Instance2
+          Port: 8080
+      VpcId: vpc-07b73b4a6a6c322eb
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: 180 
+        - Key: deregistration_delay.timeout_seconds
+          Value: 300 
+        - Key: slow_start.duration_seconds
+          Value: 30  
+
+
+  ALBListenerNoSslCertificate:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+

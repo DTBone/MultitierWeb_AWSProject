@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  DBUsername:
+    Type: String
+    Description: "Username for the RDS instance"
+    MinLength: 1
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: "Password for the RDS instance"
+    MinLength: 1
+  DBInstanceIdentifier:
+    Type: String
+    Description: "Identifier for the RDS instance"
+    MinLength: 1
+  GitHubRepoURL:
+    Type: String
+    Description: "URL of the GitHub repository containing the database backup file"
+
+Resources:
+  MyDBInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      AllocatedStorage: 20
+      DBInstanceIdentifier: !Ref "DBInstanceIdentifier"
+      DBName: "mydatabase"
+      Engine: "mysql"
+      EngineVersion: "5.7"
+      MasterUsername: !Ref "DBUsername"
+      MasterUserPassword: !Ref "DBPassword"
+      MultiAZ: false
+      PubliclyAccessible: true
+
+  MyEC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: "t2.micro"
+      ImageId: "ami-0230bd60aa48260c6"  # Thay thế bằng AMI ID phù hợp
+      KeyName: vockey
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y mysql
+          mysql -h ${MyDBInstance.Endpoint.Address} -P 3306 -u ${DBUsername} -p${DBPassword} < <(curl -sL ${GitHubRepoURL})
+
+Outputs:
+  RDSInstanceEndpoint:
+    Description: "Endpoint of the RDS instance"
+    Value: !GetAtt MyDBInstance.Endpoint.Address
+  EC2InstancePublicIP:
+    Description: "Public IP address of the EC2 instance"
+    Value: !GetAtt MyEC2Instance.PublicIp
